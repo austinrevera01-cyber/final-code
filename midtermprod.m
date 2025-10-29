@@ -1,13 +1,8 @@
 clear; clc; close all;
 
-results = struct();
-results.part1  = run_part1_motor_model();
-results.part1j = run_part1j_benchmark();
-results.part2  = run_part2_pd_and_vehicle();
-
-assignin('base', 'midterm_motor_suite_results', results);
-
-disp('Midterm motor suite complete.  Results pushed to midterm_motor_suite_results.');
+part1_results = run_part1_motor_model();
+run_part1j_benchmark(part1_results);
+run_part2_pd_and_vehicle();
 
 function part1 = run_part1_motor_model()
     %% Part I (sim_prod.m) - Motor modeling and gearbox study
@@ -118,9 +113,13 @@ function part1 = run_part1_motor_model()
     part1.gear_step_response     = omega_out_step(:);
 end
 
-function part1j = run_part1j_benchmark()
+function part1j = run_part1j_benchmark(part1_model)
     %% Part I.j (pcode_test.m) - Pull benchmark data from run_Indy_car.p
     disp('--- Part I.j: Capturing run_Indy_car benchmark ---');
+
+    if nargin < 1
+        part1_model = struct();
+    end
 
     Vstep   = 12;          % Input voltage [V]
     dt      = 0.001;       % Sample time [s]
@@ -166,11 +165,19 @@ function part1j = run_part1j_benchmark()
         theta_counts(k) = acc_counts;
     end
 
-    theta_m = unwrap(theta_counts * (2 * pi / CPR));
-    omega_m = gradient(theta_m, dt);
+    counts2rad = 2 * pi / CPR;
 
-    theta_out = theta_m / gear_N;
-    omega_out = omega_m / gear_N;
+    % The encoder in run_Indy_car is mounted after the gearbox, so the
+    % accumulated counts already reflect the output shaft position.  Convert
+    % that measurement to radians first, then infer the motor-side quantities
+    % by multiplying with the gear ratio instead of dividing.  This keeps the
+    % benchmark output trajectory consistent with the Part I.i analytical
+    % model, which predicts the output speed.
+    theta_out = unwrap(theta_counts * counts2rad);
+    omega_out = gradient(theta_out, dt);
+
+    theta_m = theta_out * gear_N;
+    omega_m = omega_out * gear_N;
 
     tail_idx      = max(1, round(0.9 * steps)):steps;
     omega_ss      = mean(omega_m(tail_idx));
@@ -187,6 +194,20 @@ function part1j = run_part1j_benchmark()
     ylabel('Speed [rad/s]');
     title('run\_Indy\_car.p Motor vs Output Speed (12 V Step)');
     legend('Location', 'best');
+
+    if isfield(part1_model, 'gear_step_time') && isfield(part1_model, 'gear_step_response')
+        figure('Name', 'Part I.i vs Part I.j Output Speed', 'NumberTitle', 'off');
+        plot(part1_model.gear_step_time, part1_model.gear_step_response, 'LineWidth', 1.5, ...
+            'DisplayName', 'Part I.i Model');
+        hold on;
+        plot(time_vec, omega_out, '--', 'LineWidth', 1.5, 'DisplayName', 'Part I.j Benchmark');
+        grid on;
+        xlabel('Time [s]');
+        ylabel('Speed [rad/s]');
+        title('Part I.i Model vs. Part I.j Benchmark Output Speed');
+        legend('Location', 'best');
+        xlim([0, min(max(part1_model.gear_step_time), max(time_vec))]);
+    end
 
     fclose('all');
 
