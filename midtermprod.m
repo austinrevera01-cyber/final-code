@@ -1,8 +1,13 @@
 clear; clc; close all;
 
-part1_results = run_part1_motor_model();
-run_part1j_benchmark(part1_results);
-run_part2_pd_and_vehicle();
+results = struct();
+results.part1  = run_part1_motor_model();
+results.part1j = run_part1j_benchmark(results.part1);
+results.part2  = run_part2_pd_and_vehicle();
+
+assignin('base', 'midterm_motor_suite_results', results);
+
+disp('Midterm motor suite complete.  Results pushed to midterm_motor_suite_results.');
 
 function part1 = run_part1_motor_model()
     %% Part I (sim_prod.m) - Motor modeling and gearbox study
@@ -136,6 +141,10 @@ function part1j = run_part1j_benchmark(part1_model)
         part1_model = struct();
     end
 
+    if nargin < 1
+        part1_model = struct();
+    end
+
     Vstep   = 12;          % Input voltage [V]
     dt      = 0.001;       % Sample time [s]
     t_end   = 0.5;         % Capture window [s]
@@ -209,6 +218,20 @@ function part1j = run_part1j_benchmark(part1_model)
     ylabel('Speed [rad/s]');
     title('run\_Indy\_car.p Motor vs Output Speed (12 V Step)');
     legend('Location', 'best');
+
+    if isfield(part1_model, 'gear_step_time') && isfield(part1_model, 'gear_step_response')
+        figure('Name', 'Part I.i vs Part I.j Output Speed', 'NumberTitle', 'off');
+        plot(part1_model.gear_step_time, part1_model.gear_step_response, 'LineWidth', 1.5, ...
+            'DisplayName', 'Part I.i Model');
+        hold on;
+        plot(time_vec, omega_out, '--', 'LineWidth', 1.5, 'DisplayName', 'Part I.j Benchmark');
+        grid on;
+        xlabel('Time [s]');
+        ylabel('Speed [rad/s]');
+        title('Part I.i Model vs. Part I.j Benchmark Output Speed');
+        legend('Location', 'best');
+        xlim([0, min(max(part1_model.gear_step_time), max(time_vec))]);
+    end
 
     if isfield(part1_model, 'gear_step_time') && isfield(part1_model, 'gear_step_response')
         figure('Name', 'Part I.i vs Part I.j Output Speed', 'NumberTitle', 'off');
